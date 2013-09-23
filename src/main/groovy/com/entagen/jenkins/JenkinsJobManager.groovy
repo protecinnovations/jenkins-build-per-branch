@@ -1,6 +1,7 @@
 package com.entagen.jenkins
 
 import java.util.regex.Pattern
+import groovy.json.JsonSlurper
 
 class JenkinsJobManager {
     String templateJobPrefix
@@ -11,6 +12,8 @@ class JenkinsJobManager {
     String branchNameRegex
     String jenkinsUser
     String jenkinsPassword
+    String cleanupJobName
+    String deployJobBaseName
     
     Boolean dryRun = false
     Boolean noViews = false
@@ -48,7 +51,7 @@ class JenkinsJobManager {
         List<String> currentTemplateDrivenJobNames = templateDrivenJobNames(templateJobs, allJobNames)
         List<String> nonTemplateBranchNames = allBranchNames - templateBranchName
         List<ConcreteJob> expectedJobs = this.expectedJobs(templateJobs, nonTemplateBranchNames)
-
+        
         createMissingJobs(expectedJobs, currentTemplateDrivenJobNames, templateJobs)
         if (!noDelete) {
             deleteDeprecatedJobs(currentTemplateDrivenJobNames - expectedJobs.jobName)
@@ -62,18 +65,32 @@ class JenkinsJobManager {
         for(ConcreteJob missingJob in missingJobs) {
             println "Creating missing job: ${missingJob.jobName} from ${missingJob.templateJob.jobName}"
             jenkinsApi.cloneJobForBranch(missingJob, templateJobs)
+            jenkinsApi.enableJob(missingJob.jobName)
             if (startOnCreate) {
                 jenkinsApi.startJob(missingJob)
             }
         }
-
     }
 
     public void deleteDeprecatedJobs(List<String> deprecatedJobNames) {
         if (!deprecatedJobNames) return
         println "Deleting deprecated jobs:\n\t${deprecatedJobNames.join('\n\t')}"
         deprecatedJobNames.each { String jobName ->
+            jenkinsApi.wipeOutWorkspace(jobName)
             jenkinsApi.deleteJob(jobName)
+        }
+        
+        if (cleanupJobName != null) {
+            List<String> deployFeatureNames = deprecatedJobNames.collectMany{ it.contains('deploy') ? [it.replace(deployJobBaseName, '').replace('-', '_').replace(' ', '')] : [] }
+            
+            if (deployFeatureNames.size > 0) {
+                String features = deployFeatureNames.join(',')
+                println "Cleaning up Features:$features using $cleanupJobName"
+                
+                def body = [:]
+                body = [json:  '{"parameter":[{"name": "Features", "value": "' + features + '"}]}']
+                jenkinsApi.startJobWithParameters(cleanupJobName, body)
+            }
         }
     }
 

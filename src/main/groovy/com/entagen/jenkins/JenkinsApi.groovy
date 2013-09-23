@@ -65,6 +65,11 @@ class JenkinsApi {
         println "Starting job ${job.jobName}."
         post('job/' + job.jobName + '/build')
     }
+    
+    void startJobWithParameters(String jobName, postBody = [:]) {
+        println "Starting job ${jobName}."
+        post('job/' + jobName + '/build', postBody)
+    }
 
     String configForMissingJob(ConcreteJob missingJob, List<TemplateJob> templateJobs) {
         TemplateJob templateJob = missingJob.templateJob
@@ -94,6 +99,16 @@ class JenkinsApi {
     void deleteJob(String jobName) {
         println "deleting job $jobName"
         post("job/${jobName}/doDelete")
+    }
+    
+    void wipeOutWorkspace(String jobName) {
+        println "wiping out workspace for job $jobName"
+        post("job/${jobName}/doWipeOutWorkspace")
+    }
+
+    void enableJob(String jobName) {
+        println "enable job $jobName"
+        post("job/${jobName}/enable")
     }
 
     void createViewForBranch(BranchView branchView, String nestedWithinView = null) {
@@ -190,11 +205,6 @@ class JenkinsApi {
         if (crumbInfo) {
             params[crumbInfo.field] = crumbInfo.crumb
         }
-
-
-
-
-
 
         HTTPBuilder http = new HTTPBuilder(jenkinsServerUrl)
 
